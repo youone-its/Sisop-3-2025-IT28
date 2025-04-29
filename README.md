@@ -1,5 +1,5 @@
 # Sisop-3-2025-IT28
-# Laporan Praktikum IT28 Modul 2
+# Laporan Praktikum IT28 Modul 3
 ## Anggota Kelompok
 | No |             Nama              |     NRP     |
 |----|-------------------------------|-------------|
