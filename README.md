@@ -674,3 +674,234 @@ char* buy_weapon(int idx) {
 
 ## Soal_4
 ### Oleh: Yuan Banny Albyan
+---
+
+## Fitur Utama
+
+1. **Shared Memory IPC**
+
+   * `system.c` membuat dua segmen shared memory:
+
+     * `HuntersShared` untuk data hunter (max 100).
+     * `DungeonsShared` untuk data dungeon (max 100).
+2. **Manajemen Dungeon**
+
+   * Generate dungeon acak dengan rewards EXP/ATK/HP/DEF.
+   * Notification mode (`-n`) untuk hunter agar tampilan dungeon terus ter-update.
+3. **Hunter Client**
+
+   * **Register & Login** dengan username/password.
+   * **List** dungeon yang sesuai level.
+   * **Raid**: ambil rewards, hapus dungeon, dan level up otomatis tiap 500 EXP.
+   * **Battle** hunter lain: compare power (ATK+HP+DEF), pemenang “mencuri” stat, yang kalah ter–logout.
+4. **Admin Console (system.c)**
+
+   * List semua hunters & dungeons.
+   * Generate dungeon baru on-demand.
+   * Toggle Ban/Unban hunter & Reset stats.
+
+---
+
+## Persyaratan & Instalasi
+
+* Compiler C (gcc)
+* Unix-like OS (Linux/macOS) yang support `ftok`, `shmget`, `shmat`, `pthread`, `signal`
+
+```bash
+# Clone repo atau tarball
+git clone https://…/dungeon-hunter.git
+cd dungeon-hunter
+
+# Kompilasi
+gcc -o system system.c
+gcc -o hunter hunter.c -lpthread
+```
+
+---
+
+## Urutan Menjalankan
+
+1. **Jalankan `system` terlebih dulu** agar shared memory ter-init:
+
+   ```bash
+   ./system
+   ```
+2. **Jalankan satu atau beberapa client** hunter di terminal berbeda:
+
+   ```bash
+   ./hunter           # tanpa notifikasi
+   ./hunter -n        # mode notifikasi (clear screen setiap 3 detik)
+   ```
+
+> 💡 *Tip:* Anda bisa buka banyak jendela terminal untuk simulasi banyak hunter sekaligus.
+
+---
+
+## Penjelasan Menu & Perintah
+
+### system.c (Admin)
+
+```
+1) List Hunters
+2) List Dungeons
+3) Generate Dungeon
+4) Toggle Ban/Unban Hunter
+5) Reset Hunter Stats
+6) Exit (CTRL+C juga cleanup otomatis)
+```
+
+* **Generate Dungeon**: buat “Dungeon\_N” dengan level & reward acak.
+* **Toggle Ban/Unban**: blokir hunter bandel.
+* **Reset**: kembalikan hunter ke level 1 & unban.
+
+### hunter.c (Client)
+
+#### Saat Belum Login
+
+```
+1) Register
+2) Login
+3) Exit
+```
+
+* **Register**: pilih username unik, password.
+* **Login**: masuk jika tidak banned.
+
+#### Setelah Login
+
+```
+1) List Dungeon       – dungeon sesuai levelmu
+2) Raid Dungeon       – lakukan raid & dapat reward
+3) List Hunters       – lihat hunter lain + status banned
+4) Battle Hunter      – tantang hunter lain
+5) Logout
+6) Exit
+```
+
+---
+
+## Penjelasan Kode
+
+### Struct Definitions
+
+```c
+// Data per hunter
+typedef struct {
+    int   used;           // Apakah slot ini terpakai
+    int   key;            // ID unik hunter
+    char  username[50];   // Username hunter
+    char  password[50];   // Password hunter
+    int   level;          // Level saat ini
+    int   exp;            // Experience points
+    int   atk;            // Attack stat
+    int   hp;             // Health points
+    int   def;            // Defense stat
+    int   banned;         // Flag banned (1 = banned)
+} Hunter;
+
+// Data per dungeon
+typedef struct {
+    int used;             // Apakah dungeon tersedia
+    int key;              // ID unik dungeon
+    char name[50];        // Nama dungeon ("Dungeon_n")
+    int min_level;        // Min level hunter untuk masuk
+    int atk_reward;       // Reward attack
+    int hp_reward;        // Reward HP
+    int def_reward;       // Reward defense
+    int exp_reward;       // Reward EXP
+} Dungeon;
+
+// Shared memory layout
+typedef struct { Hunter    hunters[MAX_HUNTERS]; } HuntersShared;
+typedef struct { Dungeon   dungeons[MAX_DUNGEONS]; } DungeonsShared;
+```
+
+### Fungsi Penting di `system.c`
+
+```c
+void init_shared();
+```
+
+*Menginisialisasi shared memory:*
+
+* `shmget` untuk alokasi
+* `shmat` untuk attach
+* `memset` untuk bersih-bersih
+
+```c
+void generate_dungeon();
+```
+
+*Generate satu dungeon baru secara acak:*
+
+* Cari slot kosong
+* Set `used`, `key`, randomize `min_level`, rewards
+* Cetak info dungeon
+
+```c
+void toggle_ban_hunter();       // Ban/Unban hunter
+void reset_hunter();            // Reset stats hunter ke default
+```
+
+```c
+void cleanup(int signo);
+```
+
+\_Handler `SIGINT` (CTRL+C): detach + hapus IPC + exit.
+
+### Fungsi Penting di `hunter.c`
+
+```c
+void attach_shared();
+```
+
+*Attach ke segmen yang dibuat `system.c`.*
+
+```c
+void do_register();            // Register hunter baru
+void do_login();               // Login & optional notifier thread
+```
+
+```c
+void list_dungeons_available(); // Tampilkan dungeon sesuai level
+void raid_dungeon();            // Jalankan raid: dapat rewards & hapus dungeon
+```
+
+```c
+void list_hunters_other();     // Lihat hunter lain + status
+void battle_hunter();          // Battle dua hunter: transfer stats
+```
+
+```c
+void* notifier(void *arg);     // Thread notifikasi dungeon setiap 3 detik
+```
+
+*Jika `notify_mode == 1`, thread ini clear screen dan print semua dungeon.*
+
+---
+
+## Arsitektur Shared Memory
+
+```
++-------------------+       +-------------------+
+|   system.c        |       |   hunter.c        |
+|                   |<----->|                   |
+| HuntersShared     |       | HuntersShared     |
+| ┌─ hunters[100]─┐ |       | ┌─ hunters[100]─┐ |
+| └───────────────┘ |       | └───────────────┘ |
+| DungeonsShared    |       | DungeonsShared    |
+| ┌─ dungeons[100]┐ |       | ┌─ dungeons[100]┐ |
+| └───────────────┘ |       | └───────────────┘ |
++-------------------+       +-------------------+
+```
+
+---
+
+## Kontribusi & Lisensi
+
+* **Silakan fork & PR** untuk perbaikan bug, fitur baru, atau dokumentasi.
+* Dilisensi di bawah MIT License — bebas gunakan & modifikasi.
+
+---
+
+*Selamat bertualang di dunia Dungeon Hunter! Semoga monster-nya tidak nge-lag…* 😎
