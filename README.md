@@ -347,13 +347,16 @@ Untuk Menangani deliver.
 
 ```
 
-```
+```c
     shmdt(orders);  
     return 0;
 }
 
 ```
 untuk Melepas pointer dari shared memory
+
+### delivery_agent.c
+
 
 ## Soal_3
 ### Oleh: Ica Zika Hamizah
