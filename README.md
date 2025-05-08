@@ -80,35 +80,30 @@ Server menggunakan socket TCP untuk komunikasi dan mencatat aktivitasnya dalam l
 - **Pencatatan Log**: Server mencatat semua tindakan seperti permintaan dekripsi, unggahan, dan kesalahan dalam file log `server.log`.
 
 ##### Fungsi-fungsi
-##### 1. `daemonize()`
-
-- Memforking proses untuk membuat daemon.
-- Menutup semua deskriptor file dan mengarahkannya ke `/dev/null`.
-
-##### 2. `reap_zombies()`
+##### 1. `reap_zombies()`
 
 - Menangani proses zombie (anak proses yang telah selesai menjalankan tugasnya) untuk membersihkan setelah proses anak.
 
-##### 3. `log_message(const char* source, const char* action, const char* info)`
+##### 2. `log_message(const char* source, const char* action, const char* info)`
 
 - Mencatat pesan ke dalam file log yang terletak di direktori server (`server.log`).
 - Mencatat tindakan yang dilakukan, termasuk stempel waktu.
 
-##### 4. `reverse_string(char *str)`
+##### 3. `reverse_string(char *str)`
 
 - Membalikkan string yang diberikan di tempat.
 
-##### 5. `hex_decode(const char* hex_str, unsigned char* output, int* output_len)`
+##### 4. `hex_decode(const char* hex_str, unsigned char* output, int* output_len)`
 
 - Mendekodekan string hexadecimal menjadi data biner.
 
-##### 6. `decrypt_text(const char* input_file, char* output_filename)`
+##### 5. `decrypt_text(const char* input_file, char* output_filename)`
 
 - Membuka dan membaca file terenkripsi.
 - Mendekodekannya dari hexadecimal dan membalikkan stringnya.
 - Menyimpan data yang terdekripsi sebagai file gambar baru di direktori database (`database/`).
 
-##### 7. `handle_client(int client_socket)`
+##### 6. `handle_client(int client_socket)`
 
 - Menangani permintaan dari klien, termasuk dekripsi dan pengunduhan file.
 - Merespons permintaan seperti `DECRYPT`, `DOWNLOAD`, dan `EXIT`.

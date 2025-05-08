@@ -9,40 +9,55 @@
 #include <sys/stat.h>
 #include <ctype.h>
 
+#define SERVER_DB_DIR "/home/zika/Documents/sisop/shift3/coba/server/database"
+
 void log_message(const char* source, const char* action, const char* info);
 void reverse_string(char *str);
 void hex_decode(const char* hex_str, unsigned char* output, int* output_len);
 void decrypt_text(const char* input_file, char* output_filename);
-void send_file(int client_socket, const char* filepath);
 void handle_client(int client_socket);
 
 int main() {
+    pid_t pid = fork();
+    if (pid < 0) exit(EXIT_FAILURE);
+    if (pid > 0) exit(EXIT_SUCCESS);
+
+    if (setsid() < 0) exit(EXIT_FAILURE);
+    pid = fork();
+    if (pid < 0) exit(EXIT_FAILURE);
+    if (pid > 0) exit(EXIT_SUCCESS);
+
+    // tetap di project root, jangan chdir ke /
+    // Tutup fd standar
+    fclose(stdin);
+    fclose(stdout);
+    fclose(stderr);
+
     int server_socket = socket(AF_INET, SOCK_STREAM, 0);
     if (server_socket < 0) {
-        perror("Gagal membuat socket");
-        return 1;
+        log_message("Daemon", "ERROR", "Gagal membuat socket");
+        exit(EXIT_FAILURE);
     }
 
     struct sockaddr_in server_addr = {0};
     server_addr.sin_family = AF_INET;
-    server_addr.sin_port = htons(12345); // Set port server
+    server_addr.sin_port = htons(12345);
     server_addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(server_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Gagal bind socket");
-        return 1;
+        log_message("Daemon", "ERROR", "Gagal bind socket");
+        exit(EXIT_FAILURE);
     }
 
     listen(server_socket, 5);
-    printf("Server listening on port 12345...\n");
+    log_message("Daemon", "INFO", "Server listening on port 12345");
 
     while (1) {
         int client_socket = accept(server_socket, NULL, NULL);
         if (client_socket < 0) {
-            perror("Gagal menerima koneksi");
+            log_message("Daemon", "ERROR", "Gagal menerima koneksi");
             continue;
         }
-
         if (fork() == 0) {
             close(server_socket);
             handle_client(client_socket);
@@ -56,24 +71,20 @@ int main() {
 
 void log_message(const char* source, const char* action, const char* info) {
     FILE *log_file = fopen("server/server.log", "a");
-    if (log_file != NULL) {
-        time_t t;
-        time(&t);
+    if (log_file) {
+        time_t t = time(NULL);
         struct tm *tm_info = localtime(&t);
-        char time_str[26];
-        strftime(time_str, 26, "%Y-%m-%d %H:%M:%S", tm_info);
-        fprintf(log_file, "[%s][%s]: [%s] [%s]\n", source, time_str, action, info);
+        char ts[26];
+        strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", tm_info);
+        fprintf(log_file, "[%s][%s]: [%s] [%s]\n", source, ts, action, info);
         fclose(log_file);
     }
 }
 
-
 void reverse_string(char *str) {
     int n = strlen(str);
     for (int i = 0; i < n/2; i++) {
-        char temp = str[i];
-        str[i] = str[n-i-1];
-        str[n-i-1] = temp;
+        char tmp = str[i]; str[i] = str[n-i-1]; str[n-i-1] = tmp;
     }
 }
 
@@ -88,11 +99,12 @@ void hex_decode(const char* hex_str, unsigned char* output, int* output_len) {
 }
 
 void decrypt_text(const char* input_file, char* output_filename) {
-    mkdir("server/database", 0755);
+    // Buat direktori client/database jika belum ada
+    mkdir(SERVER_DB_DIR, 0755);
 
     FILE *fin = fopen(input_file, "r");
     if (!fin) {
-        perror("gagal membuka file input");
+        log_message("Server", "ERROR", "Input file not found");
         return;
     }
 
@@ -101,123 +113,81 @@ void decrypt_text(const char* input_file, char* output_filename) {
     fseek(fin, 0, SEEK_SET);
 
     char *hex_content = malloc(fsize + 1);
-    if (!hex_content) {
-        perror("malloc gagal");
-        fclose(fin);
-        return;
-    }
-
+    if (!hex_content) { fclose(fin); return; }
     fread(hex_content, 1, fsize, fin);
     fclose(fin);
+    hex_content[fsize] = '\0';
 
-    hex_content[fsize] = '\0'; // null-terminate!
-
-    // Reverse
     reverse_string(hex_content);
 
-    // Decode
-    unsigned char decoded[32768];
-    int decoded_len = 0;
+    unsigned char decoded[32768]; int decoded_len = 0;
     hex_decode(hex_content, decoded, &decoded_len);
-
     free(hex_content);
 
-    // Simpan ke file
     time_t now = time(NULL);
-    sprintf(output_filename, "server/database/%ld.jpeg", now);
+    snprintf(output_filename, 256, SERVER_DB_DIR "/%ld.jpeg", now);
 
     FILE *fout = fopen(output_filename, "wb");
     if (!fout) {
-        perror("gagal membuka file output");
+        log_message("Server", "ERROR", "Failed opening output file");
         return;
     }
     fwrite(decoded, 1, decoded_len, fout);
     fclose(fout);
-}
-
-void send_file(int client_socket, const char* filepath) {
-    FILE *file = fopen(filepath, "rb");
-    if (!file) {
-        send(client_socket, "NOTFOUND", 8, 0);
-        return;
-    }
-
-    send(client_socket, "FOUND", 5, 0);
-
-    fseek(file, 0, SEEK_END);
-    long filesize = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    send(client_socket, &filesize, sizeof(filesize), 0);
-
-    char buffer[1024];
-    size_t n;
-    while ((n = fread(buffer, 1, sizeof(buffer), file)) > 0) {
-        send(client_socket, buffer, n, 0);
-    }
-
-    fclose(file);
+    // log_message("Server", "SAVE", output_filename);
 }
 
 void handle_client(int client_socket) {
-    char buffer[256];
-    int n;
+    char buf[512];
     while (1) {
-        memset(buffer, 0, sizeof(buffer));
-        n = recv(client_socket, buffer, sizeof(buffer), 0);
+        memset(buf, 0, sizeof(buf));
+        int n = recv(client_socket, buf, sizeof(buf)-1, 0);
         if (n <= 0) break;
+        buf[n] = '\0';
 
-        if (strncmp(buffer, "DECRYPT", 7) == 0) {
-            char input_file[128];
-            sscanf(buffer, "DECRYPT %s", input_file);
-
-            char output_filename[256];
-            decrypt_text(input_file, output_filename);
-
-            char *basename = strrchr(output_filename, '/') + 1;
-
+        if (strncmp(buf, "DECRYPT", 7) == 0) {
+            char inp[256], outfn[256];
+            sscanf(buf, "DECRYPT %255s", inp);
+            decrypt_text(inp, outfn);
+            // kirim basename
+            char *base = strrchr(outfn, '/') + 1;
+            // revisi
             log_message("Client", "DECRYPT", "Text data");
-            log_message("Server", "SAVE", basename);
+            log_message("Server", "SAVE", base);
+            send(client_socket, base, strlen(base), 0);
 
-            send(client_socket, basename, strlen(basename), 0);
+        } else if (strncmp(buf, "DOWNLOAD", 8) == 0) {
+            char fn[128]; sscanf(buf, "DOWNLOAD %127s", fn);
+            char path[512]; 
 
-        } else if (strncmp(buffer, "DOWNLOAD", 8) == 0) {
-            char filename[100];
-            sscanf(buffer, "DOWNLOAD %s", filename);
-        
-            char path[256];
-            snprintf(path, sizeof(path), "server/database/%s", filename);
-        
-            FILE *file = fopen(path, "rb");
-            if (file) {
-                // Kirim "FOUND" dulu ke client
+            snprintf(path, sizeof(path), "%s/%s", SERVER_DB_DIR, fn);
+            FILE *f = fopen(path, "rb");
+            if (!f) { send(client_socket, "NOTFOUND", 8, 0); }
+            else {
                 send(client_socket, "FOUND", 5, 0);
-        
-                fseek(file, 0, SEEK_END);
-                long filesize = ftell(file);
-                fseek(file, 0, SEEK_SET);
-        
-                // Kirim ukuran file
-                send(client_socket, &filesize, sizeof(filesize), 0);
-        
-                // Kirim isi file
-                char buffer[1024];
-                long bytes_sent = 0;
-                while (bytes_sent < filesize) {
-                    int n = fread(buffer, 1, sizeof(buffer), file);
-                    send(client_socket, buffer, n, 0);
-                    bytes_sent += n;
-                }
-                fclose(file);
+                fseek(f, 0, SEEK_END); long sz = ftell(f); fseek(f, 0, SEEK_SET);
 
-                log_message("Server", "UPLOAD", filename);
-            } else {
-                // Kalau file tidak ditemukan
-                send(client_socket, "NOTFOUND", 8, 0);
+                if (send(client_socket, &sz, sizeof(sz), 0) != sizeof(sz)) {
+                    log_message("Server", "ERROR", "Failed to send file size");
+                    fclose(f);
+                    return;
+                }
+                
+                // Kirim file
+                char tmp[1024]; 
+                size_t r;
+                while (r = fread(tmp, 1, sizeof(tmp), f)) {
+                    if (send(client_socket, tmp, r, 0) != r) {
+                        log_message("Server", "ERROR", "Failed to send file chunk");
+                        break;
+                    }
+                }
+                fclose(f);
+                log_message("Server", "UPLOAD", fn);
             }
 
-        } else if (strncmp(buffer, "EXIT", 4) == 0) {
-            log_message("Client", "EXIT", "Client requested to exit");
+        } else if (strncmp(buf, "EXIT", 4) == 0) {
+            log_message("Server", "EXIT", "Client disconnected");
             break;
         }
     }
