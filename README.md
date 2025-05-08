@@ -114,7 +114,7 @@ Server menggunakan socket TCP untuk komunikasi dan mencatat aktivitasnya dalam l
 Program ini adalah client agent dalam sistem pengiriman: Menyambung ke shared memory. Memungkinkan agen: Mengantar pesanan, Mengecek status, Melihat semua pesanan. Mencatat log pengiriman ke delivery.log.
 
 #### Library dan Macro
-```
+```c
 #include <stdio.h>     
 #include <stdlib.h>    
 #include <string.h>    
@@ -130,7 +130,7 @@ Program ini adalah client agent dalam sistem pengiriman: Menyambung ke shared me
 Program ini adalah persiapan awal agar program bisa menjalankan fitur utama seperti menyimpan data order, berbagi data antar proses (shared memory), mencatat waktu, dan menampilkan informasi ke layar.
 
 ### Struktur Data Order
-```
+```c
 typedef struct {
     char nama[64];      
     char alamat[128];    
@@ -148,12 +148,12 @@ Struktur ini menyimpan informasi satu pesanan pengiriman.
 -`agen`: untuk Nama agen yang mengantar
 
 ### Fungsi log_delivery
-```
+```c
 void log_delivery(const char *agent, const char *nama, const char *alamat, const char *tipe) {
 ```
 Untuk Mencatat log pengiriman ke file delivery.log.
 
-```
+```c
     FILE *log = fopen("delivery.log", "a");
     if (!log) {
         perror("fopen log");
@@ -162,14 +162,14 @@ Untuk Mencatat log pengiriman ke file delivery.log.
 ```
 Untuk Membuka file dalam mode append (a). Jika gagal, tampilkan error.
 
-```
+```c
     time_t now = time(NULL);              
     struct tm *t = localtime(&now);       
 ```
 -`time_t now`: Waktu saat ini
 -`struct tm *t`: untukMengonversi ke format waktu lokal
 
-```
+```c
     fprintf(log, "[%02d/%02d/%04d %02d:%02d:%02d] [AGENT %s] %s package delivered to %s in %s\n",
         t->tm_mday, t->tm_mon + 1, t->tm_year + 1900,
         t->tm_hour, t->tm_min, t->tm_sec,
@@ -178,7 +178,7 @@ Untuk Membuka file dalam mode append (a). Jika gagal, tampilkan error.
 ```
 Menulis data ke file log dalam format waktu [dd/mm/yyyy hh:mm:ss].
 
-```
+```c
     fclose(log); 
 }
 
@@ -186,13 +186,13 @@ Menulis data ke file log dalam format waktu [dd/mm/yyyy hh:mm:ss].
 Untuk Menutup file log
 
 ### Fungsi deliver_reguler_order
-```
+```c
 void deliver_reguler_order(const char *target_nama, const char *user_agent, Order *orders)
 
 ```
 Untuk Mencari pesanan dengan nama tertentu dan tipe Reguler, lalu menandainya sebagai "Delivered".
 
-```
+```c
     for (int i = 0; i < MAX_ORDERS; i++) {
         if (strcmp(orders[i].nama, target_nama) == 0 &&
             strcmp(orders[i].tipe, "Reguler") == 0 &&
@@ -201,14 +201,14 @@ Untuk Mencari pesanan dengan nama tertentu dan tipe Reguler, lalu menandainya se
 ```
 Untuk Mengecek apakah nama cocok, tipe Reguler, dan status Pending.
 
-```
+```c
             strcpy(orders[i].status, "Delivered");
             strcpy(orders[i].agen, user_agent);
 
 ```
 Update status dan nama agen pengantar.
 
-```
+```c
             log_delivery(user_agent, orders[i].nama, orders[i].alamat, "Reguler");
             printf("Pesanan Reguler untuk %s telah dikirim oleh AGENT %s.\n", target_nama, user_agent);
             return;
@@ -216,27 +216,27 @@ Update status dan nama agen pengantar.
 ```
 Panggil fungsi log_delivery dan tampilkan pesan ke pengguna.
 
-```
+```c
     printf("Pesanan Reguler untuk %s tidak ditemukan atau sudah dikirim.\n", target_nama);
 
 ```
 Cek jika tidak ditemukan.
 
 ### Fungsi check_status
-```
+```c
 void check_status(const char *nama, Order *orders)
 
 ```
 Mengecek status pengiriman berdasarkan nama.
 
-```
+```c
     for (int i = 0; i < MAX_ORDERS; i++) {
         if (strcmp(orders[i].nama, nama) == 0) {
 
 ```
 Cek Jika nama cocok
 
-```
+```c
             if (strcmp(orders[i].status, "Delivered") == 0) {
                 printf("Status for %s: Delivered by %s\n", orders[i].nama, orders[i].agen);
             } else {
@@ -247,20 +247,20 @@ Cek Jika nama cocok
 ```
 Untuk menampilkan status pengiriman.
 
-```
+```c
     printf("Pesanan dengan nama %s tidak ditemukan.\n", nama);
 
 ```
 Cek Jika tidak ada.
 
 ### Fungsi list_orders
-```
+```c
 void list_orders(Order *orders)
 
 ```
 Menampilkan semua pesanan yang ada.
 
-```
+```c
     for (int i = 0; i < MAX_ORDERS; i++) {
         if (strlen(orders[i].nama) > 0) {
             printf("%s - %s - %s\n", orders[i].nama, orders[i].status, orders[i].tipe);
@@ -270,13 +270,13 @@ Menampilkan semua pesanan yang ada.
 ```
 
 ### Fungsi main
-```
+```c
 int main(int argc, char *argv[])
 
 ```
 Fungsi utama program. Menangani perintah deliver, status, dan list.
 
-```
+```c
     if (argc < 2) {
         printf("Usage: %s [-deliver] [-status] [-list] [nama]\n", argv[0]);
         return 1;
@@ -285,13 +285,13 @@ Fungsi utama program. Menangani perintah deliver, status, dan list.
 ```
 Validasi argumen minimal.
 
-```
+```c
     int shm_id = shmget(SHM_KEY, sizeof(Order) * MAX_ORDERS, 0666);
 
 ```
 Mengakses shared memory berdasarkan SHM_KEY.
 
-```
+```c
     if (shm_id < 0) {
         perror("shmget");
         return 1;
@@ -300,13 +300,13 @@ Mengakses shared memory berdasarkan SHM_KEY.
 ```
 Jika gagal, tampilkan error.
 
-```
+```c
     Order *orders = (Order *)shmat(shm_id, NULL, 0);
 
 ```
 Attach ke shared memory dan meng-cast ke pointer Order.
 
-```
+```c
     if (orders == (void *)-1) {
         perror("shmat");
         return 1;
@@ -315,13 +315,13 @@ Attach ke shared memory dan meng-cast ke pointer Order.
 ```
 
 ### Eksekusi Perintah
-```
+```c
     if (strcmp(argv[1], "-deliver") == 0 && argc == 3)
 
 ```
 Untuk Menangani deliver.
 
-```
+```c
         char *nama_target = argv[2];
         char *user_agent = getenv("USER");
         if (!user_agent) user_agent = "Unknown";
@@ -329,19 +329,19 @@ Untuk Menangani deliver.
 
 ```
 
-```
+```c
     else if (strcmp(argv[1], "-status") == 0 && argc == 3)
         check_status(argv[2], orders);
 
 ```
 
-```
+```c
     else if (strcmp(argv[1], "-list") == 0)
         list_orders(orders);
 
 ```
 
-```
+```c
     else
         printf("Perintah tidak valid.\n");
 
