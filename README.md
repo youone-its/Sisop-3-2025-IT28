@@ -357,6 +357,75 @@ untuk Melepas pointer dari shared memory
 
 ### delivery_agent.c
 
+### Library Header
+```c
+#include <stdio.h>       
+#include <stdlib.h>       
+#include <string.h>       
+#include <pthread.h>     
+#include <sys/shm.h>      
+#include <sys/ipc.h>      
+#include <unistd.h>       
+#include <time.h>         
+
+```
+Header-header tersebut digunakan sebagai persiapan agar program dapat membaca data, menyimpan hasil, berbagi memori antar proses, menjalankan banyak thread, dan mencatat waktu.
+
+### Constant dan Struktur Data
+```c
+#define MAX_ORDERS 100
+#define SHM_KEY 1234
+
+```
+-`MAX_ORDERS`: Maksimum jumlah order (pesanan) yang disimpan di shared memory.
+
+-`SHM_KEY`: Kunci unik untuk shared memory agar bisa diakses oleh beberapa proses.
+
+```c
+typedef struct {
+    char nama[64];
+    char alamat[128];
+    char tipe[10];    
+    char status[20];  
+    char agen[32];   
+} Order;
+
+```
+Struktur data untuk menyimpan satu order, berisi:
+-`nama`: nama penerima.
+-`alamat`: alamat tujuan.
+-`tipe`: jenis pengiriman (Express atau Reguler).
+-`status`: status pengiriman.
+-`agen`: siapa agen yang mengirim.
+
+### Global Variables
+```c
+Order *orders;
+int shm_id;
+pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+```
+-`orders`: pointer ke array Order di shared memory.
+-`shm_id`: ID dari shared memory segment.
+-`lock`: mutex untuk menghindari race condition saat beberapa thread mengakses data bersama.
+
+### Fungsi write_log
+```c
+void write_log(const char *agent, const char *nama, const char *alamat)
+
+```
+Mencatat log pengiriman ke file delivery.log. Format:
+```css
+[dd/mm/yyyy hh:mm:ss] [AGENT] Express package delivered to NAMA in ALAMAT
+
+```
+
+
+
+
+
+
+
 
 ## Soal_3
 ### Oleh: Ica Zika Hamizah
