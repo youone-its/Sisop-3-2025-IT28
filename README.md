@@ -420,12 +420,80 @@ Mencatat log pengiriman ke file delivery.log. Format:
 
 ```
 
+### Fungsi download_csv
+```c
+void download_csv()
 
+```
+Mengunduh file delivery_order.csv menggunakan perintah wget. File ini berisi daftar order dari Google Drive.
 
+### Fungsi load_orders_from_csv
+```c
+void load_orders_from_csv(const char *csv_filename)
 
+```
+Program membuka file CSV, membaca setiap baris, memisahkan kolom dengan strtok(), lalu mengisi data ke array orders di shared memory dengan status awal "Pending" dan agen masih kosong.
 
+### Fungsi all_delivered
+```c
+int all_delivered()
 
+```
+Mengembalikan 1 (true) jika semua Express order telah "Delivered", 0 jika masih ada yang "Pending".
 
+### Fungsi agent_thread
+```c
+void *agent_thread(void *arg)
+
+```
+Setiap thread agen mencari order Express yang masih Pending, lalu jika ada, mengubah statusnya menjadi Delivered, mengisi nama agen, mencatat log, dan jika tidak ada lagi order, berhenti—sambil tidur 1 detik tiap loop agar ringan di CPU.
+
+### Fungsi main()
+```c
+int main()
+
+```
+## Langkah-langkah:
+# Unduh file CSV:
+```c
+download_csv();
+
+```
+# Buat shared memory:
+```c
+shm_id = shmget(SHM_KEY, sizeof(Order) * MAX_ORDERS, 0666 | IPC_CREAT);
+
+```
+# Attach ke shared memory:
+```c
+orders = (Order *)shmat(shm_id, NULL, 0);
+
+```
+# Muat data dari CSV ke shared memory:
+```c
+load_orders_from_csv("delivery_order.csv");
+
+```
+# Buat thread untuk 3 agen:
+```c
+pthread_create(&agents[0], NULL, agent_thread, "AGENT A");
+
+```
+# Tunggu semua thread selesai (join):
+```c
+pthread_join(agents[i], NULL);
+
+```
+# Detach shared memory:
+```c
+shmdt(orders);
+
+```
+# Program selesai:
+```c
+printf("All deliveries completed. Exiting...\n");
+
+```
 
 ## Soal_3
 ### Oleh: Ica Zika Hamizah
